@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Madden Roster Toolkit</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h1>Rosters</h1>
+      <ul id="roster-list"></ul>
+      <button id="new-roster-btn">+ New Roster</button>
+    </aside>
+
+    <main class="main">
+      <header class="roster-header">
+        <input id="roster-name" placeholder="Roster name" />
+        <input id="team-name" placeholder="Team name" />
+        <div class="spacer"></div>
+        <label class="file-btn">
+          Import CSV
+          <input id="csv-input" type="file" accept=".csv" hidden />
+        </label>
+        <button id="export-csv-btn">Export CSV</button>
+        <button id="delete-roster-btn" class="danger">Delete Roster</button>
+      </header>
+
+      <div id="validation" class="validation"></div>
+
+      <div class="table-wrap">
+        <table id="player-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>First</th>
+              <th>Last</th>
+              <th>#</th>
+              <th>Pos</th>
+              <th>Ht (in)</th>
+              <th>Wt (lb)</th>
+              <th>Age</th>
+              <th>College</th>
+              <th>OVR</th>
+              <th>Attributes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="player-rows"></tbody>
+        </table>
+      </div>
+
+      <button id="add-player-btn">+ Add Player</button>
+      <span id="player-count"></span>
+
+      <details class="debug-panel">
+        <summary>Team Builder network recon log</summary>
+        <p class="hint">
+          When you have Team Builder open in another tab, requests whose URL looks
+          roster/preset/team-related get logged here (most recent first) so we can
+          reverse-engineer the real import endpoint. Nothing here is sent anywhere.
+        </p>
+        <button id="refresh-log-btn">Refresh</button>
+        <button id="clear-log-btn">Clear</button>
+        <pre id="network-log"></pre>
+      </details>
+    </main>
+  </div>
+
+  <dialog id="attr-dialog">
+    <h2>Attributes</h2>
+    <div id="attr-rows"></div>
+    <button id="attr-add-row">+ Attribute</button>
+    <menu>
+      <button id="attr-close" value="close">Done</button>
+    </menu>
+  </dialog>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
