@@ -413,6 +413,23 @@ map which `shellMaterial`/`tint` entries correspond to which on-screen
 control, comparable in effort to the entire roster recon+build in this
 document — treat it as a separate follow-up, not a quick addition.
 
+**A promising shortcut for that follow-up:** [Frosty Tool
+Suite](https://cadeevs-frostytoolsuite.mintlify.app/introduction), a
+modding platform for Frostbite-engine games that explicitly supports
+Madden. `shellMaterial`, `RSM`, `tint`, and `maskCid` are real Frostbite
+engine terms, not Team Builder inventions — Frosty's `TypeLibrary` can load
+a game's actual EBX class definitions at runtime, and `FrostyCmd`'s
+`shaderdump`/`shaderblockdump`/`extract` commands can dump material
+mappings, parameter layouts, and constant buffer structures straight from
+the installed game's files. That could resolve the "which slot is Base
+Color" question directly instead of by trial-and-error through the UI.
+**Requires an actual local Madden NFL installation** (`FrostyCmd.exe
+<GamePath> ...`) — it reads the installed game's files, not anything
+Team Builder's web app exposes, so this is a genuinely separate research
+track from everything else in this document. See
+`docs/uniforms-stadium-followup-prompt.md` for a ready-to-use prompt for
+that session.
+
 ## Unknowns / follow-up if needed
 
 - Exact contents of `/wal/authentication/login` (request or response) —
