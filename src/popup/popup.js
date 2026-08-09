@@ -7,6 +7,7 @@ const el = {
   openOptions: document.getElementById("open-options"),
   importBtn: document.getElementById("import-btn"),
   siteStatus: document.getElementById("site-status"),
+  teamStatus: document.getElementById("team-status"),
 };
 
 const TEAM_BUILDER_PATTERNS = [
@@ -35,11 +36,24 @@ async function init() {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const onTeamBuilder = !!tab?.url && TEAM_BUILDER_PATTERNS.some(p => tab.url.startsWith(p));
+  let teamContext = null;
+
   if (!onTeamBuilder) {
     el.siteStatus.textContent = "Open Team Builder to push a roster.";
     el.importBtn.disabled = true;
   } else {
-    el.siteStatus.textContent = "Team Builder detected on this tab.";
+    try {
+      teamContext = await chrome.tabs.sendMessage(tab.id, { type: "GET_TEAM_CONTEXT" });
+    } catch (err) {
+      // content script not ready yet (e.g. page still loading)
+    }
+    if (teamContext?.brandId) {
+      el.siteStatus.textContent = "Team Builder detected on this tab.";
+      el.teamStatus.textContent = `Pushing to: ${teamContext.teamName ?? "(unnamed team)"} (${teamContext.brandId})`;
+    } else {
+      el.siteStatus.textContent = "Open a specific team (Brand, Roster, ...) to push into.";
+      el.importBtn.disabled = true;
+    }
   }
 
   el.importBtn.addEventListener("click", async () => {

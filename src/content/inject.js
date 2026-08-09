@@ -67,16 +67,25 @@
   };
 
   // --- roster push (stub) ---
-  // TODO: once we know the real preset/roster payload shape, replace this
-  // with logic that either (a) rewrites the matching fetch/XHR response the
-  // way inject.js does in the reference project, or (b) POSTs the converted
-  // roster to Team Builder's save endpoint directly.
-  function pushRoster(roster) {
+  // TODO: per docs/teambuilder-api-recon.md, the real save is a single PUT of
+  // the whole team+roster bundle to a presigned S3 URL. Replace this with
+  // logic that intercepts that outgoing PUT (fetch/XHR patches above already
+  // give us the hook point) and splices `roster`, mapped to the PLYR_* schema,
+  // into `teamData.roster.playerData` before it's sent -- the page's own
+  // already-authenticated save flow does the rest. `teamContext` (below) is
+  // whatever team the user currently has open, detected from the tab's URL
+  // and the on-page team name -- always operate on that team, never a
+  // hardcoded one.
+  function pushRoster(roster, teamContext) {
     window.__mttPendingRoster = roster;
+    window.__mttTeamContext = teamContext;
+    const teamLabel = teamContext?.brandId
+      ? `"${teamContext.teamName ?? "unnamed team"}" (${teamContext.brandId})`
+      : "an undetected team (open Brand/Roster/... in Team Builder first)";
     console.info(
-      "[Madden Roster Toolkit] Received roster to push, but the Team Builder integration isn't wired up yet.\n" +
-        "The roster is available at window.__mttPendingRoster for manual inspection.\n" +
-        "See extension/README.md for how to help finish this.",
+      `[Madden Roster Toolkit] Received roster to push for ${teamLabel}, but the Team Builder integration isn't wired up yet.\n` +
+        "The roster is available at window.__mttPendingRoster (and the detected team at window.__mttTeamContext) for manual inspection.\n" +
+        "See docs/teambuilder-api-recon.md and README.md for how to help finish this.",
       roster
     );
   }
@@ -84,7 +93,7 @@
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     if (event.data?.source !== "mtt-content" || event.data?.type !== "PUSH_ROSTER") return;
-    pushRoster(event.data.roster);
+    pushRoster(event.data.roster, event.data.teamContext);
   });
 
   console.info("[Madden Roster Toolkit] Network recon active on", location.href);

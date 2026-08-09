@@ -19,6 +19,11 @@ behavior is working.
   multiple saved rosters.
 - ✅ Popup: shows the active roster's status, detects whether the current
   tab is Team Builder, has a "Push Roster" button.
+- ✅ Team detection: the popup reads the brand id out of the current tab's
+  URL (`.../team-create/{page}/{brandId}`) and the team name off the page
+  itself, so "Push Roster" always targets whichever team the user currently
+  has open in Team Builder -- never a hardcoded one. If no team is open
+  (e.g. sitting on a team list), the push button stays disabled.
 - 🚧 **Actually pushing a roster into Team Builder is not implemented yet.**
   Team Builder's real API/response shape is unknown — `src/content/inject.js`
   currently just logs matching network traffic and stores the roster you'd

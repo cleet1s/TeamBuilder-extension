@@ -4,6 +4,20 @@
 const NETWORK_LOG_KEY = "networkLog";
 const MAX_LOG_ENTRIES = 50;
 
+// Team Builder URLs look like
+// https://www.ea.com/games/madden-nfl/team-builder/team-create/{page}/{brandId}
+// e.g. .../team-create/roster/rUfkIObgju -- the last path segment is the
+// brand/team id of whatever team the user currently has open.
+const BRAND_ID_PATTERN = /\/team-create\/[a-z-]+\/([A-Za-z0-9_-]+)\/?(?:[?#].*)?$/i;
+
+function getTeamContext() {
+  const match = location.pathname.match(BRAND_ID_PATTERN);
+  const brandId = match ? match[1] : null;
+  const nameEl = document.querySelector(".team-media-title > div:first-child");
+  const teamName = nameEl?.textContent.trim() || null;
+  return { brandId, teamName, url: location.href };
+}
+
 window.addEventListener("message", async (event) => {
   if (event.source !== window) return;
   if (event.data?.source !== "mtt-inject" || event.data?.type !== "NETWORK_LOG") return;
@@ -14,8 +28,15 @@ window.addEventListener("message", async (event) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "GET_TEAM_CONTEXT") {
+    sendResponse(getTeamContext());
+    return;
+  }
   if (message.type !== "IMPORT_ROSTER") return;
-  window.postMessage({ source: "mtt-content", type: "PUSH_ROSTER", roster: message.roster }, "*");
+  window.postMessage(
+    { source: "mtt-content", type: "PUSH_ROSTER", roster: message.roster, teamContext: getTeamContext() },
+    "*"
+  );
   sendResponse({ ok: true });
 });
 
