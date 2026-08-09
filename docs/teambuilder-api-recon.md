@@ -334,6 +334,85 @@ Same CDN pattern, all public/unauthenticated `GET`:
 - `skin_tone_filter.json`, `complexion_group_mapping.json` — appearance
   options for custom player generation.
 
+## The other tabs: Brand, Uniforms, Stadium & Field
+
+Same save mechanism as Roster (whole-bundle PUT to `nonce-primary.json`,
+see above) — these tabs just touch different parts of `teamData`. Difficulty
+to support pushing to varies a lot by tab:
+
+**Brand — easy, already covered.** Team name/abbreviation/city/colors/logos
+edited on this tab live in `teamData.teamInfos`, which we already fully
+captured above (`TEAM_NAME`, `TEAM_SHORTNAME`, `TEAM_BACKGROUNDCOLORR/G/B`
+×3, `TEAM_PRIMARY_LOGO`/etc, `CITY_NAME`, `CITY_STATE`, ...). Logo images go
+through the same content-share upload pipeline as the team-card thumbnails
+in the save flow above (`TEAM_LOGO` asset name). Extending `pushRoster()`'s
+approach (patch `teamData.teamInfos` fields in place before the bundle PUT)
+would work the same way it does for players.
+
+**Uniforms and Stadium & Field — hard, not reverse-engineered.** These live
+in `teamData.frostbiteData`, which is a much deeper structure than the flat
+`PLYR_*` roster schema:
+
+```
+frostbiteData: {
+  textures: {},                  // empty in our capture
+  teamVisuals: {...},            // 2.3KB
+  characterVisuals: {...},       // 175KB -- per-player 3D appearance (70 players)
+  characterUniformItems: {...},  // 1.3KB -- slot registry, see below
+  uniformParts: {...},           // 122KB -- the actual uniform data, see below
+  field: { assetId, layerCompTexture },
+  stadiumRecipe: { assetName, sceneElements },
+  stadiumAudio: null,
+  stadiumVisuals: { assetName, stadiumVenue: {...} },
+  characterAbilities: {...},     // 1.5KB
+}
+```
+
+`characterUniformItems` is a small registry mapping slot names
+(`U_<brandId>_HELMET_HOME`, `_JERSEY_AWAY`, `_PANTS_HOME`, etc.) to a
+`partItem` id (e.g. `"<brandId>-home-helmet"`). The actual customization
+lives in `uniformParts`, bucketed by type:
+
+```
+uniformParts: {
+  helmets: { "<brandId>-home-helmet": {...}, "<brandId>-away-helmet": {...} },
+  jerseys: { ... },
+  pants:   { ... },
+  socks:   { ... },
+}
+```
+
+Each part (e.g. a helmet) is a full Frostbite material graph, not a color
+field:
+
+```
+{
+  "name": "EA_HELMET_2024_BLACK",       // helmet model/style, not the color we set
+  "number": { arrayTexture, maskCid, materials: [...] },
+  "helmetMaterialSettings": { hasBackNumber, numberSelection, offsetScaleSpacing, numberRsm },
+  "facemaskMaterialSettings": {...},
+  "layerCompTexture": {...},
+  "shellMaterial": { "0": {...}, "1": {...}, ..., "31": {...}, ... },  // per-slot material array
+  "accMaterial": {...},
+  "facemaskMaterial": {...}
+}
+```
+
+We changed the Base Color swatch to red via the UI and saved, but didn't
+trace exactly which of the ~30+ numbered `shellMaterial` slots (each with
+its own `textures`/`rsm`/`tint`/`transform`) that edit landed in, or whether
+"Base Color" is one slot's tint, several slots at once, or resolved via
+`maskCid` channel indices instead. `stadiumVisuals.stadiumVenue` has the
+same pattern (`edgeWalls`, presumably seating/tarp/etc, each with its own
+`colorTex`/`logoTex`/`tint`).
+
+**Bottom line:** pushing brand info is a small, mechanical extension of the
+existing `pushRoster()` approach. Pushing uniform or stadium customization
+(colors, patterns, logos placement) would need a dedicated recon pass to
+map which `shellMaterial`/`tint` entries correspond to which on-screen
+control, comparable in effort to the entire roster recon+build in this
+document — treat it as a separate follow-up, not a quick addition.
+
 ## Unknowns / follow-up if needed
 
 - Exact contents of `/wal/authentication/login` (request or response) —
