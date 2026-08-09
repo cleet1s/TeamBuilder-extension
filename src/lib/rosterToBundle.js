@@ -13,6 +13,11 @@
 
 import { positionIdForCode, resolveRatingField, clampRating } from "./eaSchema.js";
 
+// PLYR_WEIGHT is not literal pounds -- it's an offset from the UI slider's
+// 160 lb floor (e.g. a raw "40" displays as 200 lbs; confirmed against a live
+// save). PLYR_HEIGHT, by contrast, is literal inches with no offset.
+const WEIGHT_LBS_OFFSET = 160;
+
 export function applyRosterToBundle(bundle, roster) {
   const playerData = bundle?.teamData?.roster?.playerData;
   if (!playerData) {
@@ -84,7 +89,9 @@ function applyPlayerFields(bundlePlayer, rosterPlayer) {
   if (posId != null) bundlePlayer.PLYR_POSITION = String(posId);
 
   if (rosterPlayer.heightInches != null) bundlePlayer.PLYR_HEIGHT = String(rosterPlayer.heightInches);
-  if (rosterPlayer.weightLbs != null) bundlePlayer.PLYR_WEIGHT = String(rosterPlayer.weightLbs);
+  if (rosterPlayer.weightLbs != null) {
+    bundlePlayer.PLYR_WEIGHT = String(Math.max(0, Math.min(240, Math.round(rosterPlayer.weightLbs - WEIGHT_LBS_OFFSET))));
+  }
   if (rosterPlayer.age != null) bundlePlayer.PLYR_AGE = String(rosterPlayer.age);
   if (rosterPlayer.overall != null) {
     const clamped = clampRating(rosterPlayer.overall);

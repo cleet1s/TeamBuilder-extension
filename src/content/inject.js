@@ -57,6 +57,10 @@
     [16, "CB"], [17, "FS"], [18, "SS"], [19, "K"], [20, "P"], [21, "LS"],
   ];
   const POSITION_ALIASES = { LE: "LEDG", RE: "REDG", LOLB: "SAM", MLB: "MIKE", ROLB: "WILL" };
+  // PLYR_WEIGHT is not literal pounds -- it's an offset from the UI slider's
+  // 160 lb floor. PLYR_HEIGHT is literal inches with no offset. Confirmed
+  // against a live save.
+  const WEIGHT_LBS_OFFSET = 160;
 
   function positionIdForCode(code) {
     const upper = String(code || "").toUpperCase();
@@ -129,7 +133,9 @@
     const posId = positionIdForCode(rosterPlayer.position);
     if (posId != null) bundlePlayer.PLYR_POSITION = String(posId);
     if (rosterPlayer.heightInches != null) bundlePlayer.PLYR_HEIGHT = String(rosterPlayer.heightInches);
-    if (rosterPlayer.weightLbs != null) bundlePlayer.PLYR_WEIGHT = String(rosterPlayer.weightLbs);
+    if (rosterPlayer.weightLbs != null) {
+      bundlePlayer.PLYR_WEIGHT = String(Math.max(0, Math.min(240, Math.round(rosterPlayer.weightLbs - WEIGHT_LBS_OFFSET))));
+    }
     if (rosterPlayer.age != null) bundlePlayer.PLYR_AGE = String(rosterPlayer.age);
     if (rosterPlayer.overall != null) {
       const clamped = clampRating(rosterPlayer.overall);
