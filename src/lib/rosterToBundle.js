@@ -142,3 +142,29 @@ function applyCharacterVisualFields(visual, rosterPlayer) {
   if (rosterPlayer.heightInches != null) visual.heightInches = rosterPlayer.heightInches;
   if (rosterPlayer.weightLbs != null) visual.weightPounds = rosterPlayer.weightLbs;
 }
+
+// NAME_FONT_ID/NUMBER_FONT_ID are plain strings in teamData.teamInfos, same
+// flat shape as TEAM_NAME/TEAM_PRIMARY_LOGO/etc -- see docs/teambuilder-
+// api-recon.md's Brand-tab section. Team Builder's own Font Picker UI only
+// exposes 4 of the number-font catalog's 21 real entries as clickable
+// buttons; this can set any catalog id (fetched via src/lib/fontCatalog.js),
+// live-tested against a real save (2026-08-09): an off-UI font persists and
+// renders correctly.
+export function applyFontsToBundle(bundle, fonts) {
+  const teamInfos = bundle?.teamData?.teamInfos;
+  if (!teamInfos) {
+    throw new Error(
+      "Bundle is missing teamData.teamInfos -- unexpected shape, see docs/teambuilder-api-recon.md"
+    );
+  }
+  const applied = {};
+  if (fonts?.nameFontId) {
+    teamInfos.NAME_FONT_ID = fonts.nameFontId;
+    applied.nameFontId = fonts.nameFontId;
+  }
+  if (fonts?.numberFontId) {
+    teamInfos.NUMBER_FONT_ID = fonts.numberFontId;
+    applied.numberFontId = fonts.numberFontId;
+  }
+  return applied;
+}

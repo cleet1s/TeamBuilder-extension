@@ -45,3 +45,16 @@ export async function getActiveRoster() {
   const [rosters, activeId] = await Promise.all([getRosters(), getActiveRosterId()]);
   return rosters.find(r => r.id === activeId) ?? null;
 }
+
+const SELECTED_FONTS_KEY = "selectedFonts";
+
+// { nameFontId?, numberFontId? } -- remembers the popup's font picker
+// selection across opens. Not tied to a specific roster/team.
+export async function getSelectedFonts() {
+  const { [SELECTED_FONTS_KEY]: fonts = {} } = await chrome.storage.local.get(SELECTED_FONTS_KEY);
+  return fonts;
+}
+
+export async function setSelectedFonts(fonts) {
+  await chrome.storage.local.set({ [SELECTED_FONTS_KEY]: fonts });
+}

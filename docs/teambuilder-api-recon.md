@@ -436,6 +436,16 @@ what's already written down here — `pushRoster()`-style field patching is
 sufficient. `nameplate_font_list.json` also only has 4 catalog entries and
 all 4 are already exposed in the UI, so nothing hidden there currently.
 
+**Implemented (2026-08-09):** the extension now exposes this. `src/lib/
+fontCatalog.js` fetches both catalogs live; `applyFontsToBundle()` in
+`src/lib/rosterToBundle.js` (and its MAIN-world duplicate in
+`src/content/inject.js`) patches `NAME_FONT_ID`/`NUMBER_FONT_ID`; the popup
+has a "Fonts" section with a dropdown per catalog (all entries, not just
+the 4 Team Builder's own UI wires up) and a "Push Fonts to Team Builder"
+button using the same arm-then-click-Save flow as the roster push.
+`inject.js`'s `pending` state now carries `roster` and/or `fonts`
+independently, so arming one doesn't clobber the other.
+
 **Note on `BRAND_ID` / other brands (not yet tested):** both font catalogs
 are shaped as a dict keyed by brand (`{"NIKE": [...]}`), implying the schema
 supports other brand keys even though only `NIKE` is populated in the

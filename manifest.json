@@ -46,6 +46,8 @@
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
     "https://teambuilder.easports.com/*",
-    "https://www.ea.com/games/madden-nfl/team-builder/*"
+    "https://www.ea.com/games/madden-nfl/team-builder/*",
+    "https://q.mcr.ea.com/*",
+    "https://cdn.mcr.ea.com/*"
   ]
 }

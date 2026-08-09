@@ -60,12 +60,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse(getTeamContext());
     return;
   }
-  if (message.type !== "IMPORT_ROSTER") return;
-  window.postMessage(
-    { source: "mtt-content", type: "PUSH_ROSTER", roster: message.roster, teamContext: getTeamContext() },
-    "*"
-  );
-  sendResponse({ ok: true });
+  if (message.type === "IMPORT_ROSTER") {
+    window.postMessage(
+      { source: "mtt-content", type: "PUSH_ROSTER", roster: message.roster, teamContext: getTeamContext() },
+      "*"
+    );
+    sendResponse({ ok: true });
+    return;
+  }
+  if (message.type === "IMPORT_FONTS") {
+    window.postMessage(
+      { source: "mtt-content", type: "PUSH_FONTS", fonts: message.fonts, teamContext: getTeamContext() },
+      "*"
+    );
+    sendResponse({ ok: true });
+    return;
+  }
 });
 
 injectFloatingButton();

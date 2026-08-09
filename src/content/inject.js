@@ -178,6 +178,27 @@
     if (rosterPlayer.weightLbs != null) visual.weightPounds = rosterPlayer.weightLbs;
   }
 
+  // --- fonts -> bundle (mirrors src/lib/rosterToBundle.js's applyFontsToBundle) ---
+  // NAME_FONT_ID/NUMBER_FONT_ID are plain strings in teamData.teamInfos, same
+  // flat shape as TEAM_NAME etc. Team Builder's own Font Picker UI only
+  // exposes 4 of the number-font catalog's 21 real entries as clickable
+  // buttons; this can set any catalog id, live-tested against a real save
+  // (2026-08-09): an off-UI font persists and renders correctly.
+  function applyFontsToBundle(bundle, fonts) {
+    const teamInfos = bundle && bundle.teamData && bundle.teamData.teamInfos;
+    if (!teamInfos) throw new Error("Bundle is missing teamData.teamInfos");
+    const applied = {};
+    if (fonts && fonts.nameFontId) {
+      teamInfos.NAME_FONT_ID = fonts.nameFontId;
+      applied.nameFontId = fonts.nameFontId;
+    }
+    if (fonts && fonts.numberFontId) {
+      teamInfos.NUMBER_FONT_ID = fonts.numberFontId;
+      applied.numberFontId = fonts.numberFontId;
+    }
+    return applied;
+  }
+
   // --- recon logging (unchanged) ---
   function relayToContentScript(entry) {
     window.postMessage({ source: "mtt-inject", type: "NETWORK_LOG", entry }, "*");
@@ -265,8 +286,10 @@
       }
 
       const parsed = JSON.parse(text);
-      const report = applyRosterToBundle(parsed, armed.roster);
-      console.info("[Madden Roster Toolkit] Rewrote outgoing roster bundle:", report);
+      const report = {};
+      if (armed.roster) report.roster = applyRosterToBundle(parsed, armed.roster);
+      if (armed.fonts) report.fonts = applyFontsToBundle(parsed, armed.fonts);
+      console.info("[Madden Roster Toolkit] Rewrote outgoing bundle:", report);
       armed.report = report;
       const rewrittenText = JSON.stringify(parsed);
 
@@ -286,8 +309,11 @@
     );
   }
 
-  // --- roster push: arm the interceptor, then try to trigger the real SAVE ---
-  let pending = null; // { roster, teamContext, report? }
+  // --- push: arm the interceptor, then try to trigger the real SAVE ---
+  // `pending` can carry `roster` and/or `fonts` at once -- e.g. arming a
+  // font push doesn't clobber an already-armed roster push. Each field is
+  // applied independently in tryRewriteBody if present.
+  let pending = null; // { roster?, fonts?, teamContext, report? }
 
   function findSaveButton() {
     const candidates = Array.from(document.querySelectorAll('button, [role="button"], a'));
@@ -297,13 +323,15 @@
     });
   }
 
-  function pushRoster(roster, teamContext) {
-    pending = { roster, teamContext };
-    window.__mttPendingRoster = roster;
+  function armPending(patch, teamContext) {
+    const next = { ...(pending || {}), ...patch, teamContext };
+    pending = next;
+    window.__mttPendingRoster = next.roster;
+    window.__mttPendingFonts = next.fonts;
     window.__mttTeamContext = teamContext;
 
     setTimeout(() => {
-      if (pending && pending.roster === roster) pending = null; // TTL backstop
+      if (pending === next) pending = null; // TTL backstop -- only if nothing newer armed since
     }, PENDING_TTL_MS);
 
     const saveBtn = findSaveButton();
@@ -321,10 +349,22 @@
     }
   }
 
+  function pushRoster(roster, teamContext) {
+    armPending({ roster }, teamContext);
+  }
+
+  function pushFonts(fonts, teamContext) {
+    armPending({ fonts }, teamContext);
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
-    if (event.data?.source !== "mtt-content" || event.data?.type !== "PUSH_ROSTER") return;
-    pushRoster(event.data.roster, event.data.teamContext);
+    if (event.data?.source !== "mtt-content") return;
+    if (event.data.type === "PUSH_ROSTER") {
+      pushRoster(event.data.roster, event.data.teamContext);
+    } else if (event.data.type === "PUSH_FONTS") {
+      pushFonts(event.data.fonts, event.data.teamContext);
+    }
   });
 
   console.info("[Madden Roster Toolkit] Network recon + roster push active on", location.href);

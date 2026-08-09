@@ -38,6 +38,17 @@ behavior is working.
   `src/lib/rosterToBundle.js` (the merge itself) for the mapping logic --
   `inject.js` keeps its own copy of both since MAIN-world content scripts
   can't use ES module imports.
+- ✅ **Fonts: every catalog font, not just the ones Team Builder's own UI
+  offers.** Team Builder's Font Picker only wires up 4 of the number-font
+  catalog's 21 real entries as clickable buttons -- the other 17 are
+  complete, already-public assets, just not exposed as a choice (see
+  `docs/teambuilder-api-recon.md`'s Brand-tab section). The popup's "Fonts"
+  section fetches the full catalog live (`src/lib/fontCatalog.js`) for both
+  Nameplates and Numbers and lets you push any entry via the same
+  arm-then-click-Save flow as the roster push (`applyFontsToBundle()` in
+  `rosterToBundle.js`/`inject.js`, patching the plain `NAME_FONT_ID`/
+  `NUMBER_FONT_ID` string fields in `teamData.teamInfos`). Live-tested
+  against a real save.
 
 ## Load it in Chrome
 
@@ -82,7 +93,8 @@ src/
   lib/
     model.js           roster/player schema, position minimums, validation
     eaSchema.js         Team Builder's real rating/position schema
-    rosterToBundle.js   merges a roster into a captured save bundle
+    rosterToBundle.js   merges a roster/fonts into a captured save bundle
+    fontCatalog.js       fetches Team Builder's full font catalogs (Nameplates/Numbers)
     storage.js          chrome.storage.local wrapper
     csv.js              CSV import/export
 docs/
