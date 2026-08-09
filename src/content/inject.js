@@ -98,10 +98,19 @@
     const pairs = [];
     const remainingRoster = [];
 
+    // Jersey numbers aren't guaranteed unique across the whole bundle; only
+    // accept a jersey match if the candidate's existing position also
+    // agrees, else fall through to position-based Pass 2. See
+    // src/lib/rosterToBundle.js for why (a live-observed OVR=0 corruption).
     for (const rp of roster.players) {
       if (rp.jerseyNumber == null) { remainingRoster.push(rp); continue; }
       const jersey = String(rp.jerseyNumber);
-      const candidate = bundleEntries.find(([id, bp]) => !usedBundleIds.has(id) && bp.PLYR_JERSEYNUM === jersey);
+      const posId = positionIdForCode(rp.position);
+      const candidate = bundleEntries.find(([id, bp]) =>
+        !usedBundleIds.has(id) &&
+        bp.PLYR_JERSEYNUM === jersey &&
+        (posId == null || String(bp.PLYR_POSITION) === String(posId))
+      );
       if (candidate) { usedBundleIds.add(candidate[0]); pairs.push([candidate, rp]); }
       else remainingRoster.push(rp);
     }

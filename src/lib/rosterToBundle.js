@@ -38,15 +38,28 @@ export function applyRosterToBundle(bundle, roster) {
   const pairs = [];
   const remainingRoster = [];
 
-  // Pass 1: match by jersey number, the most reliable signal we have.
+  // Pass 1: match by jersey number -- but ONLY if the candidate's existing
+  // position also agrees with the roster player's intended position. Jersey
+  // numbers are not guaranteed unique across the whole bundle (confirmed: a
+  // real preset had the same number on both an HB and a CB slot), and
+  // Object.entries() walks numeric-string keys in ascending id order, not
+  // position order -- an unqualified jersey match can silently land a player
+  // in a same-numbered but wrong-position slot, corrupting it (observed
+  // live: Team Builder's OVR formula produced 0 for a HB-flavored player
+  // pushed into an originally-CB slot). If jersey+position don't agree,
+  // treat it as no match and fall through to position-based Pass 2.
   for (const rp of roster.players) {
     if (rp.jerseyNumber == null) {
       remainingRoster.push(rp);
       continue;
     }
     const jersey = String(rp.jerseyNumber);
+    const posId = positionIdForCode(rp.position);
     const candidate = bundleEntries.find(
-      ([id, bp]) => !usedBundleIds.has(id) && bp.PLYR_JERSEYNUM === jersey
+      ([id, bp]) =>
+        !usedBundleIds.has(id) &&
+        bp.PLYR_JERSEYNUM === jersey &&
+        (posId == null || String(bp.PLYR_POSITION) === String(posId))
     );
     if (candidate) {
       usedBundleIds.add(candidate[0]);
