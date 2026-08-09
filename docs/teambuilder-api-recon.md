@@ -408,6 +408,49 @@ in the save flow above (`TEAM_LOGO` asset name). Extending `pushRoster()`'s
 approach (patch `teamData.teamInfos` fields in place before the bundle PUT)
 would work the same way it does for players.
 
+Also in `teamData.teamInfos`, same flat style: `NAME_FONT_ID` (nameplate
+font), `NUMBER_FONT_ID` (jersey number font), `BRAND_ID` (always `"NIKE"`
+for every team we've seen — no UI to change it, and it's a plain string
+field like the others). Example: `"NAME_FONT_ID":"font_standard_blocky_jersey_2022","NUMBER_FONT_ID":"nike_number_font_michigan_state","BRAND_ID":"NIKE"`.
+
+The Brand tab's font pickers fetch a shared catalog
+(`https://q.mcr.ea.com/r/346/file/tu1-dIYu6WDcXK_number_font_list.json`,
+similarly `..._nameplate_font_list.json`) shaped `{"NIKE": [{id, displayName,
+thumbnail, file}, ...]}`. **The UI only wires up 4 of the catalog's 21 number
+fonts as clickable buttons** (All League, Bureau, Stroked Bureau, Michigan
+State) — the other 17 (Stroked Vapor Strike, Wide Full Block, Boulder
+variants, etc.) are complete, valid, already-public assets the client
+already fetches, just not exposed as picker options. Each catalog entry's
+`file` URL is a small standalone JSON — same `overlays`/`textures.color.
+textureId`/`tint`/`blend`/`transform` shape as everything else in this
+doc — pointing at a real, current game asset, e.g. `Nike_Jersey_2025_
+StrokedVapor_Strike_NUM_Array`.
+
+**Live-tested (2026-08-09):** patched `NUMBER_FONT_ID` directly to
+`"nike_number_font_stroked_vapor_strike"` (one of the 17 UI-locked fonts) in
+an otherwise-untouched save, confirmed via fresh reload that the server
+persisted it, and confirmed visually that it renders correctly (distinct
+green-stroked/coral font, clearly different from all 4 UI options). So: all
+21 catalog fonts are usable today, no reverse-engineering needed beyond
+what's already written down here — `pushRoster()`-style field patching is
+sufficient. `nameplate_font_list.json` also only has 4 catalog entries and
+all 4 are already exposed in the UI, so nothing hidden there currently.
+
+**Note on `BRAND_ID` / other brands (not yet tested):** both font catalogs
+are shaped as a dict keyed by brand (`{"NIKE": [...]}`), implying the schema
+supports other brand keys even though only `NIKE` is populated in the
+catalog this default template loads. Madden Team Builder's own webpack
+bundle loads CFB-specific asset paths (e.g. `assets/fonts/cfb/...`) even
+when loading a Madden team, confirming Madden and College Football 27 Team
+Builder share the same frontend/catalog infrastructure — and CFB rosters
+include many Under Armour/Adidas/Jordan Brand programs, so it's plausible
+non-Nike `BRAND_ID` values exist in the underlying data model even if
+Team Builder's UI never offers them for Madden teams. Untested: what other
+`BRAND_ID` strings are valid, and whether setting one unlocks a parallel
+font/logo catalog. Best next step is checking CFB27 Team Builder's own
+equivalent catalog endpoints for other brand keys before guessing values
+blind (see `docs/uniforms-stadium-followup-prompt.md`).
+
 **Uniforms and Stadium & Field — hard, not reverse-engineered.** These live
 in `teamData.frostbiteData`, which is a much deeper structure than the flat
 `PLYR_*` roster schema:

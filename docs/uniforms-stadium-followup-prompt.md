@@ -1,10 +1,109 @@
 # Follow-up prompt: decode Team Builder's uniform/stadium material data
 
+## Update (2026-08-09): a working reference implementation already exists — read this first
+
+A second recon session found **prior art that likely obsoletes the
+FMT/local-install plan below for helmets/jerseys/pants/socks material
+editing**: [jtrosclair/teamcrafters-classic-roster-importer](https://github.com/jtrosclair/teamcrafters-classic-roster-importer)
+(GPL-3.0, actively maintained — v0.6.0 as of 2026-08-08, one day before this
+was written), a Chrome extension built by TeamCrafters
+(teamcrafters.net, a large CFB 27 stats/roster community site) that already
+does uniform pushing for **College Football 27's Team Builder** — which
+shares Madden's exact save format (`nonce-primary.json` bundle PUT,
+same `teamInfos`/`frostbiteData` shape; confirmed by shared frontend code —
+Madden's own Team Builder page loads CFB-specific asset paths like
+`assets/fonts/cfb/...`).
+
+**What their repo contains** — pull these files down and read them before
+doing anything else:
+- `uniform-catalog.json`, `uniform-recipes-{helmets,jerseys,pants,socks}.json`
+  — decoded, save-ready material recipes for **1,167 real CFB 27 uniforms
+  across 150 schools**, "pulled from the game's own files" per their
+  README (a separate offline "catalog generator" not included in this repo
+  did the actual extraction — their own CHANGELOG confirms it works with
+  "Frosty's enum names," i.e. they used Frosty-family tooling on their end,
+  so someone already paid that cost).
+- `uniform-build.js` — converts catalog entries into the exact
+  `teamVisuals.uniforms` shape EA's save payload uses. Confirms concrete,
+  production-verified values we didn't have before:
+  ```
+  slotType: 93 = helmet, 98 = jersey, 97 = pants, 94 = socks, 95/96 = shoes
+  ALTERNATE_LOADOUT_TYPE = 8   (marks a uniform as an extra/alternate, not Home/Away)
+  LoadoutType_TeamDark = 6, LoadoutType_TeamLight = 3
+  ```
+  Part recipes are keyed by normalized asset basename: strip a leading
+  `U_`, uppercase — e.g. `.../U_ALA_PANTS_2023_WHITE` → `ALA_PANTS_2023_WHITE`.
+- **The flake-helmet answer, confirmed directly in `uniform-recipes-helmets.json`:**
+  metal flake is an `overlays` entry labeled `"Flake Add"` that references a
+  **shared, generic** texture —
+  `ContentShared/characters/player/parts/uniforms/commonTextures/helmet/metalFlake_sparser_color`
+  — layered on top of the base shell material via a `transform` (x/y/z/w)
+  that controls placement/scale, not a different material type. This is
+  the exact same `overlays`/`textures.color.textureId`/`tint`/`blend`/
+  `transform` shape already documented below and in
+  `docs/teambuilder-api-recon.md` for number fonts — so this whole family
+  of "add an overlay layer with a shared texture" is one mechanism, not
+  three separate ones to figure out.
+- `equipment-web-bridge.js` — how they sync a web-based editor with the
+  extension; relevant if we ever want an equivalent editor UI rather than
+  hand-picking recipe JSON.
+- Known gap, per their CHANGELOG: a couple of parts (e.g.
+  `PUR_PANTS_2024_GOLD`, `NIKE_SOCKS_2023_WHITE`) have no decoded recipe
+  and fall back to prebuilt-asset references — so their catalog isn't
+  100% complete, but it's overwhelmingly comprehensive and, being CFB
+  data, contains no NFL teams (no Saints/Panthers entries) — the value
+  here is the *structural* answer (how the material graph works, real
+  working `textureId` paths, the shared flake overlay), not literal Saints
+  gold-flake data, which would still need sourcing separately (Madden's own
+  files via FMT, most likely, now a much smaller/better-scoped task since
+  we know the shape to look for).
+
+**The direct-bundle-patch technique, proven live this same session (see
+`docs/teambuilder-api-recon.md`'s Brand-tab section for full detail):**
+Team Builder's Font Picker UI only exposes 4 of 21 real catalog number
+fonts as clickable buttons — the other 17 are complete, valid, already-
+public assets, just not wired to a UI button. We patched
+`NUMBER_FONT_ID` directly (a flat string field in `teamData.teamInfos`) to
+one of the 17 locked values during a real save, confirmed via fresh reload
+that the server persisted it, and confirmed visually that it renders
+correctly. No Frosty/FMT/local install needed for that — just a save-time
+field rewrite, the same pattern `src/content/inject.js` already uses for
+roster pushes (arm a pending change, click Team Builder's own Save button,
+rewrite the outgoing PUT body in flight before it leaves the browser; the
+body is an `ArrayBuffer`, not a string or Blob — decode with
+`TextDecoder`/re-encode with `TextEncoder`).
+
+**Recommended next step, before touching FMT/a local install at all:**
+adapt `uniform-build.js`'s conversion logic (or just read their recipe
+JSON directly) and try live-testing a recipe-built helmet material —
+including the "Flake Add" overlay — against a Madden 27 team via that same
+technique: patch it into an armed pending change, click Team Builder's own
+Save, reload, and check whether Madden's renderer accepts
+`ContentShared/characters/player/parts/uniforms/commonTextures/helmet/
+metalFlake_sparser_color` (a `ContentShared` path name suggests it may not
+be CFB-exclusive). If Madden's renderer accepts it, the FMT/local-install
+plan below may not be needed for the flake-helmet goal at all — only for
+sourcing the *specific* Saints/Panthers `textureId`s if the shared flake
+overlay alone doesn't match their exact look closely enough.
+
+Also worth doing early: join the TeamCrafters Discord (linked from
+teamcrafters.net) and/or open a GitHub issue/discussion on their repo —
+this is a fellow developer (goes by "Jerry" in their changelog) actively
+building the same category of tool for the sibling platform; there's
+likely a shortcut to the actual "catalog generator" extraction tool or at
+least a conversation worth having before re-deriving what they've already
+solved.
+
+## Everything below this line predates the discovery above
+
 Paste the block below into a new session (a fresh one — it doesn't assume
 any prior conversation) once you have **Madden NFL actually installed
 locally**. This is a separate research track from the rest of this repo:
 everything else here was built by driving the Team Builder *website*;
-this needs the real game files.
+this needs the real game files. **Given the update above, treat this as a
+fallback for sourcing Madden-specific texture IDs (e.g. the actual Saints
+gold-flake asset) after exhausting the TeamCrafters-recipe approach, not
+as the first thing to try.**
 
 ## Status update (Aug 2026 recon session)
 
@@ -93,10 +192,19 @@ assigns uniform parts — conceptually close to Team Builder's
 PartTypeIndex: 0 = helmet, 1 = jersey, 2 = pants, 3 = socks, 4 = shoes
 OfficalTypeIndex: 0 = Home, 1 = Away, 2+ = alternates
 ```
+**Supersede this with the TeamCrafters repo's numbers where they
+overlap** (see the update at the top of this doc) — `uniform-build.js`
+has production-verified values from a live CFB 27 save: `slotType`
+93/98/97/94/95/96 for helmet/jersey/pants/socks/shoes×2, and
+`ALTERNATE_LOADOUT_TYPE = 8` for marking a non-Home/Away uniform slot.
+Community-thread numbers above are unconfirmed secondhand info; the
+TeamCrafters values are from someone else's working, live-tested code.
 
-None of the above has been extracted/verified yet — it's a starting point
-for the next session with FMT and a local Madden install, not a finished
-finding.
+None of the material-graph content above (the `helmet_preset_*` asset
+paths specifically) has been extracted/verified yet by us — it's a
+starting point for the next session with FMT and a local Madden install,
+if the TeamCrafters-recipe approach (see the update at the top) doesn't
+pan out first.
 
 ---
 
