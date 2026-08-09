@@ -324,6 +324,7 @@
   }
 
   function armPending(patch, teamContext) {
+    const alreadyArmed = !!pending; // e.g. fonts armed while a roster push is still waiting to fire
     const next = { ...(pending || {}), ...patch, teamContext };
     pending = next;
     window.__mttPendingRoster = next.roster;
@@ -333,6 +334,14 @@
     setTimeout(() => {
       if (pending === next) pending = null; // TTL backstop -- only if nothing newer armed since
     }, PENDING_TTL_MS);
+
+    if (alreadyArmed) {
+      // Merged into the still-pending change -- SAVE was already clicked (or
+      // the user was already told to click it) for the first arm; clicking
+      // again would just double-fire the save.
+      console.info("[Madden Roster Toolkit] Merged into an already-armed pending change.");
+      return;
+    }
 
     const saveBtn = findSaveButton();
     if (saveBtn) {
