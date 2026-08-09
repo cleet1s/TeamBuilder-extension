@@ -91,6 +91,7 @@
   function applyRosterToBundle(bundle, roster) {
     const playerData = bundle && bundle.teamData && bundle.teamData.roster && bundle.teamData.roster.playerData;
     if (!playerData) throw new Error("Bundle is missing teamData.roster.playerData");
+    const characterVisuals = bundle && bundle.teamData && bundle.teamData.frostbiteData && bundle.teamData.frostbiteData.characterVisuals;
 
     const bundleEntries = Object.entries(playerData);
     const usedBundleIds = new Set();
@@ -115,7 +116,10 @@
       else unmatchedRoster.push(rp);
     }
 
-    for (const [[, bundlePlayer], rosterPlayer] of pairs) applyPlayerFields(bundlePlayer, rosterPlayer);
+    for (const [[id, bundlePlayer], rosterPlayer] of pairs) {
+      applyPlayerFields(bundlePlayer, rosterPlayer);
+      applyCharacterVisualFields(characterVisuals && characterVisuals[id], rosterPlayer);
+    }
 
     return {
       matched: pairs.length,
@@ -147,6 +151,22 @@
       const clamped = clampRating(value);
       if (clamped != null) bundlePlayer[field] = String(clamped);
     }
+  }
+
+  // Unlike playerData's PLYR_* fields (all strings, PLYR_WEIGHT offset-encoded),
+  // characterVisuals stores these as plain numbers and weightPounds is literal
+  // pounds -- confirmed against a live save. jerseyName isn't independently
+  // editable in the UI; it tracks lastName.
+  function applyCharacterVisualFields(visual, rosterPlayer) {
+    if (!visual) return;
+    if (rosterPlayer.firstName) visual.firstName = rosterPlayer.firstName;
+    if (rosterPlayer.lastName) {
+      visual.lastName = rosterPlayer.lastName;
+      visual.jerseyName = rosterPlayer.lastName;
+    }
+    if (rosterPlayer.jerseyNumber != null) visual.jerseyNumber = rosterPlayer.jerseyNumber;
+    if (rosterPlayer.heightInches != null) visual.heightInches = rosterPlayer.heightInches;
+    if (rosterPlayer.weightLbs != null) visual.weightPounds = rosterPlayer.weightLbs;
   }
 
   // --- recon logging (unchanged) ---

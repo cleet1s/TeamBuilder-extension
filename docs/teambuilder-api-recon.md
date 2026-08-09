@@ -266,6 +266,65 @@ Full example (real shape, from the public Pistol preset — a kicker):
 ```
 (full 132-field example available by fetching the preset URL below.)
 
+## Player visual/appearance data (`characterVisuals`) — a second, separate record per player
+
+`teamData.frostbiteData.characterVisuals` is keyed by the **same player ids**
+as `playerData`, but it's a distinct record driving the 3D character model
+and jersey nameplate — **not derived from `playerData`**. This is the data
+behind the Roster tab's "Appearance" panel (Skin Tone swatches, Head
+portrait grid) below the Bio fields.
+
+```json
+{
+  "assetName": "...",
+  "genericHeadName": "gen_1_B_G_01",
+  "genericHead": 3455,
+  "bodyType": 1,
+  "skinTone": 1,
+  "firstName": "Stephen",
+  "lastName": "Cooke",
+  "jerseyNumber": 9,
+  "jerseyName": "Cooke",
+  "heightInches": 73,
+  "weightPounds": 205,
+  "containerId": "...",
+  "loadouts": [ /* equipment/gear slots -- deep Frostbite structure, not explored */ ]
+}
+```
+
+Confirmed by editing a player's Head portrait and Skin Tone via the UI and
+diffing a live save:
+
+- **`firstName`/`lastName`/`jerseyNumber`/`heightInches`/`weightPounds`
+  duplicate fields also present in `playerData`, but with different
+  encoding** — all plain JSON types here (string/number), vs. `playerData`
+  where everything is a string and `PLYR_WEIGHT` is offset-encoded.
+  **`weightPounds` is literal pounds** (no 160 offset). `jerseyName` isn't
+  independently editable in the UI — it just tracks `lastName`.
+- **`genericHead` is the same id as `PLYR_PORTRAIT`** (both `3455` in our
+  test) — the Head portrait picker sets both in lockstep. `genericHeadName`
+  is the human-readable asset name (`gen_1_B_G_01`), matching the naming
+  pattern in `portrait_id_mapping.json` (see below).
+- **`skinTone` is a simple 1–7 index** matching the public
+  `skin_tone_filter.json` config (`{id, displayName, color:{r,g,b}}` per
+  entry) — no offset, no separate encoding.
+- **`bodyType` and `loadouts`** (equipment slots — undershirt, arm sleeves,
+  etc.) weren't edited in our test; `loadouts` in particular looks like
+  another deep Frostbite structure similar to `uniformParts`, not
+  reverse-engineered.
+
+**This was a real gap in `pushRoster()`, now fixed:** because
+`characterVisuals` isn't derived from `playerData`, patching only
+`playerData` (what the original implementation did) left a pushed player's
+3D model and jersey nameplate showing their *old* name/number/height/weight
+even though the roster list and ratings updated correctly. `rosterToBundle.js`
+and `inject.js` now also patch the matched player's `characterVisuals` entry
+(name, jersey name, jersey number, height, weight) alongside `playerData` --
+using the matched bundle id from the same jersey/position matching pass, and
+only touching the fields above (appearance fields like `skinTone`/`bodyType`/
+`genericHead`/`loadouts` are left untouched, same "don't touch what you don't
+have a mapping for" policy as everywhere else).
+
 ## Position codes (`PLYR_POSITION`)
 
 Confirmed by cross-referencing stat profiles in the live roster data (e.g.

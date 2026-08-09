@@ -25,6 +25,13 @@ export function applyRosterToBundle(bundle, roster) {
       "Bundle is missing teamData.roster.playerData -- unexpected shape, see docs/teambuilder-api-recon.md"
     );
   }
+  // teamData.frostbiteData.characterVisuals is a SEPARATE per-player record
+  // (same ids as playerData) driving the 3D model and jersey nameplate --
+  // name/jersey#/height/weight are duplicated here, NOT derived from
+  // playerData. If we don't patch this too, a pushed player's ratings/name
+  // update in the roster list but their 3D model and jersey still show the
+  // old name.
+  const characterVisuals = bundle?.teamData?.frostbiteData?.characterVisuals;
 
   const bundleEntries = Object.entries(playerData);
   const usedBundleIds = new Set();
@@ -67,8 +74,9 @@ export function applyRosterToBundle(bundle, roster) {
     }
   }
 
-  for (const [[, bundlePlayer], rosterPlayer] of pairs) {
+  for (const [[id, bundlePlayer], rosterPlayer] of pairs) {
     applyPlayerFields(bundlePlayer, rosterPlayer);
+    applyCharacterVisualFields(characterVisuals?.[id], rosterPlayer);
   }
 
   return {
@@ -104,4 +112,20 @@ function applyPlayerFields(bundlePlayer, rosterPlayer) {
     const clamped = clampRating(value);
     if (clamped != null) bundlePlayer[field] = String(clamped);
   }
+}
+
+// Unlike playerData's PLYR_* fields (all strings, PLYR_WEIGHT offset-encoded),
+// characterVisuals stores these as plain numbers and weightPounds is literal
+// pounds -- confirmed against a live save. jerseyName isn't independently
+// editable in the UI; it tracks lastName.
+function applyCharacterVisualFields(visual, rosterPlayer) {
+  if (!visual) return;
+  if (rosterPlayer.firstName) visual.firstName = rosterPlayer.firstName;
+  if (rosterPlayer.lastName) {
+    visual.lastName = rosterPlayer.lastName;
+    visual.jerseyName = rosterPlayer.lastName;
+  }
+  if (rosterPlayer.jerseyNumber != null) visual.jerseyNumber = rosterPlayer.jerseyNumber;
+  if (rosterPlayer.heightInches != null) visual.heightInches = rosterPlayer.heightInches;
+  if (rosterPlayer.weightLbs != null) visual.weightPounds = rosterPlayer.weightLbs;
 }
