@@ -3,6 +3,7 @@
 
 const NETWORK_LOG_KEY = "networkLog";
 const MAX_LOG_ENTRIES = 50;
+const LAST_PUSH_RESULT_KEY = "lastPushResult";
 
 // Team Builder URLs look like
 // https://www.ea.com/games/madden-nfl/team-builder/team-create/{page}/{brandId}
@@ -19,12 +20,39 @@ function getTeamContext() {
 }
 
 window.addEventListener("message", async (event) => {
-  if (event.source !== window) return;
-  if (event.data?.source !== "mtt-inject" || event.data?.type !== "NETWORK_LOG") return;
+  if (event.source !== window || event.data?.source !== "mtt-inject") return;
 
-  const { [NETWORK_LOG_KEY]: log = [] } = await chrome.storage.local.get(NETWORK_LOG_KEY);
-  log.unshift(event.data.entry);
-  await chrome.storage.local.set({ [NETWORK_LOG_KEY]: log.slice(0, MAX_LOG_ENTRIES) });
+  if (event.data.type === "NETWORK_LOG") {
+    const { [NETWORK_LOG_KEY]: log = [] } = await chrome.storage.local.get(NETWORK_LOG_KEY);
+    log.unshift(event.data.entry);
+    await chrome.storage.local.set({ [NETWORK_LOG_KEY]: log.slice(0, MAX_LOG_ENTRIES) });
+    return;
+  }
+
+  if (event.data.type === "PUSH_RESULT") {
+    await chrome.storage.local.set({
+      [LAST_PUSH_RESULT_KEY]: {
+        armed: false,
+        ok: event.data.ok,
+        status: event.data.status,
+        report: event.data.report,
+        teamContext: event.data.teamContext,
+        time: new Date().toISOString(),
+      },
+    });
+    return;
+  }
+
+  if (event.data.type === "PUSH_ARMED") {
+    await chrome.storage.local.set({
+      [LAST_PUSH_RESULT_KEY]: {
+        armed: true,
+        autoClicked: event.data.autoClicked,
+        teamContext: event.data.teamContext,
+        time: new Date().toISOString(),
+      },
+    });
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

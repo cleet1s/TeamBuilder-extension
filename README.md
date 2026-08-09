@@ -24,18 +24,27 @@ behavior is working.
   itself, so "Push Roster" always targets whichever team the user currently
   has open in Team Builder -- never a hardcoded one. If no team is open
   (e.g. sitting on a team list), the push button stays disabled.
-- 🚧 **Actually pushing a roster into Team Builder is not implemented yet.**
-  Team Builder's real API/response shape is unknown — `src/content/inject.js`
-  currently just logs matching network traffic and stores the roster you'd
-  push at `window.__mttPendingRoster` for manual inspection. See
-  "Reverse-engineering Team Builder" below; that's the next real chunk of
-  work.
+- ✅ **Pushing a roster into Team Builder is implemented.** Per
+  `docs/teambuilder-api-recon.md`, Team Builder saves by uploading the whole
+  team+roster as one JSON bundle. `src/content/inject.js` arms the pending
+  roster, clicks Team Builder's own SAVE button for you (or tells you to
+  click it yourself if it can't find it), and rewrites that one outgoing
+  bundle PUT in flight -- patching matched players in place rather than
+  replacing the roster wholesale, since a lot of fields (contracts, draft
+  history, portraits, ...) don't have an equivalent in this editor. Players
+  are matched to bundle slots by jersey number first, then by position;
+  anything left over is reported as unmatched rather than guessed at. See
+  `src/lib/eaSchema.js` (rating/position schema) and
+  `src/lib/rosterToBundle.js` (the merge itself) for the mapping logic --
+  `inject.js` keeps its own copy of both since MAIN-world content scripts
+  can't use ES module imports.
 
 ## Load it in Chrome
 
 1. Go to `chrome://extensions`.
 2. Enable "Developer mode" (top right).
-3. Click "Load unpacked" and select the `extension/` folder.
+3. Click "Load unpacked" and select this repo's root folder (the one
+   containing `manifest.json`).
 4. Click the extension icon to open the popup, or right-click it →
    "Options" to open the roster editor.
 
@@ -47,47 +56,48 @@ need a manual reload from `chrome://extensions`.
 
 `inject.js` runs in Team Builder's own page context (a "MAIN world" content
 script, injected at `document_start`, same trick the CFB roster importer
-uses) and patches `fetch`/`XMLHttpRequest` to log any request whose URL
-looks roster/preset/team-related. With the extension loaded:
+uses) and patches `fetch`/`XMLHttpRequest` for two things: logging any
+request whose URL looks roster/preset/team-related, and (once armed by a
+"Push Roster" click) rewriting the one outgoing save request that actually
+matters. `docs/teambuilder-api-recon.md` has the full writeup of how the
+save flow was captured and what it looks like -- start there before changing
+the push logic.
 
-1. Open Team Builder and go through creating/editing a roster normally.
-2. Open the extension's options page → "Team Builder network recon log" at
-   the bottom — it fills in with matching requests (URL, method, status,
-   response body preview), sourced from `chrome.storage.local`.
-3. For the full picture, also pop open Chrome DevTools → Network tab on the
-   Team Builder tab itself, right-click → "Save all as HAR with content",
-   and share that HAR. That's the fastest way to nail down the exact
-   request/response schema (headers, auth, payload shape) needed to finish
-   `pushRoster()` in `inject.js`.
-
-Once we know the real shape, `pushRoster()` gets rewritten to either rewrite
-the matching fetch/XHR response in place (what the reference project does
-for CFB's preset system) or POST the converted roster directly to whatever
-save endpoint Team Builder uses.
+The network recon log is still there if you want to dig further: open the
+extension's options page → "Team Builder network recon log" at the bottom,
+or pop open Chrome DevTools → Network tab on the Team Builder tab itself
+and "Save all as HAR with content".
 
 ## Project layout
 
 ```
-extension/
-  manifest.json
-  src/
-    popup/            toolbar popup
-    options/           roster editor (main UI)
-    content/
-      content.js        isolated-world bridge (storage, messaging)
-      inject.js          MAIN-world script: network recon + roster push (stub)
-    background/         service worker
-    lib/
-      model.js           roster/player schema, position minimums, validation
-      storage.js          chrome.storage.local wrapper
-      csv.js               CSV import/export
+manifest.json
+src/
+  popup/            toolbar popup
+  options/          roster editor (main UI)
+  content/
+    content.js        isolated-world bridge (storage, messaging, team detection)
+    inject.js          MAIN-world script: network recon + the actual roster push
+  background/       service worker
+  lib/
+    model.js           roster/player schema, position minimums, validation
+    eaSchema.js         Team Builder's real rating/position schema
+    rosterToBundle.js   merges a roster into a captured save bundle
+    storage.js          chrome.storage.local wrapper
+    csv.js              CSV import/export
+docs/
+  teambuilder-api-recon.md   network recon this was all built from
 ```
 
-Roster data model is intentionally loose: bio fields (name, position,
-height/weight/age, college, overall) are fixed columns, but player ratings
-live in a free-form `attributes` map (`{ speed: 88, awareness: 75, ... }`)
-since EA's exact Team Builder rating schema isn't confirmed yet. Once it is,
-tighten `emptyPlayer()`/`validateRoster()` in `src/lib/model.js` accordingly.
+Roster data model: bio fields (name, position, height/weight/age, college,
+overall) are fixed columns, and position codes match Team Builder's real
+ones (see `src/lib/eaSchema.js`). Player ratings stay a free-form
+`attributes` map (`{ speed: 88, awareness: 75, ... }`) on purpose, even
+though Team Builder's real 54-field rating schema is now known -- keys are
+resolved against it by name/abbreviation/display-name at push time
+(`resolveRatingField()` in `eaSchema.js`), so the editor isn't hostage to
+typing exact `PLYR_*` field names, and unrecognized keys are just ignored
+rather than erroring.
 
 ## Porting to Safari
 
@@ -95,7 +105,7 @@ Safari can't load an extension unpacked the way Chrome can — it has to be
 wrapped in an Xcode project. Once the Chrome version works end-to-end:
 
 1. Install Xcode (Mac required) and its command-line tools.
-2. From the `extension/` directory, run:
+2. From this repo's root directory, run:
    ```
    xcrun safari-web-extension-converter . --project-location ../safari-app
    ```

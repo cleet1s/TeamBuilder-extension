@@ -8,7 +8,42 @@ const el = {
   importBtn: document.getElementById("import-btn"),
   siteStatus: document.getElementById("site-status"),
   teamStatus: document.getElementById("team-status"),
+  pushResult: document.getElementById("push-result"),
 };
+
+const LAST_PUSH_RESULT_KEY = "lastPushResult";
+
+function renderPushResult(result) {
+  if (!result) {
+    el.pushResult.textContent = "";
+    el.pushResult.className = "push-result";
+    return;
+  }
+  if (result.armed) {
+    el.pushResult.textContent = result.autoClicked === false
+      ? "Armed — click SAVE in Team Builder to finish."
+      : "Armed, clicking SAVE…";
+    el.pushResult.className = "push-result pending";
+    return;
+  }
+  if (!result.ok) {
+    el.pushResult.textContent = `Save failed (status ${result.status ?? "?"}).`;
+    el.pushResult.className = "push-result problem";
+    return;
+  }
+  const r = result.report;
+  if (!r) {
+    el.pushResult.textContent = "Saved, but couldn't confirm what was matched.";
+    el.pushResult.className = "push-result problem";
+    return;
+  }
+  const parts = [`Saved: ${r.matched}/${r.totalRosterPlayers} players matched`];
+  if (r.unmatchedRosterPlayers.length > 0) {
+    parts.push(`${r.unmatchedRosterPlayers.length} unmatched (no open slot): ${r.unmatchedRosterPlayers.join(", ")}`);
+  }
+  el.pushResult.textContent = parts.join(". ");
+  el.pushResult.className = `push-result ${r.unmatchedRosterPlayers.length > 0 ? "problem" : "ok"}`;
+}
 
 const TEAM_BUILDER_PATTERNS = [
   "https://teambuilder.easports.com/",
@@ -56,10 +91,14 @@ async function init() {
     }
   }
 
+  const { [LAST_PUSH_RESULT_KEY]: lastResult } = await chrome.storage.local.get(LAST_PUSH_RESULT_KEY);
+  renderPushResult(lastResult);
+
   el.importBtn.addEventListener("click", async () => {
     if (!tab?.id) return;
     el.importBtn.disabled = true;
     el.importBtn.textContent = "Sending…";
+    renderPushResult(null);
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
         type: "IMPORT_ROSTER",
@@ -69,8 +108,14 @@ async function init() {
     } catch (err) {
       el.importBtn.textContent = "Not ready yet";
     }
+    el.importBtn.disabled = false;
   });
 }
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes[LAST_PUSH_RESULT_KEY]) return;
+  renderPushResult(changes[LAST_PUSH_RESULT_KEY].newValue);
+});
 
 el.openOptions.addEventListener("click", () => {
   chrome.runtime.openOptionsPage();

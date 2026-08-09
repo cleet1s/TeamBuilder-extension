@@ -38,6 +38,10 @@
     button:hover { filter: brightness(0.97); }
     #site-status { font-size: 12px; color: #6b7080; margin-top: 6px; text-align: center; }
     #team-status { font-size: 12px; color: #1a1a2e; font-weight: 600; margin-top: 4px; text-align: center; }
+    .push-result { font-size: 12px; margin-top: 8px; text-align: center; }
+    .push-result.ok { color: #2b9348; }
+    .push-result.problem { color: #e5383b; }
+    .push-result.pending { color: #6b7080; }
   </style>
 </head>
 <body>
@@ -49,6 +53,7 @@
     <button id="import-btn" class="primary">Push Roster to Team Builder</button>
     <div id="site-status"></div>
     <div id="team-status"></div>
+    <div id="push-result" class="push-result"></div>
   </div>
   <script type="module" src="popup.js"></script>
 </body>
