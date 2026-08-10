@@ -246,7 +246,13 @@
 
     if (info && INTERESTING.test(info.url)) {
       xhr.addEventListener("loadend", () => {
-        relayToContentScript(summarize(info.url, info.method, xhr.status, xhr.responseText));
+        // responseText throws InvalidStateError unless responseType is ""
+        // or "text" -- Team Builder's own XHRs commonly use responseType
+        // "json", which made this throw on nearly every matching request.
+        const bodyPreview = (xhr.responseType === "" || xhr.responseType === "text")
+          ? xhr.responseText
+          : null;
+        relayToContentScript(summarize(info.url, info.method, xhr.status, bodyPreview));
       });
     }
 
