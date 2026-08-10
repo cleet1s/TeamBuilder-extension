@@ -179,23 +179,71 @@
   }
 
   // --- fonts -> bundle (mirrors src/lib/rosterToBundle.js's applyFontsToBundle) ---
-  // NAME_FONT_ID/NUMBER_FONT_ID are plain strings in teamData.teamInfos, same
-  // flat shape as TEAM_NAME etc. Team Builder's own Font Picker UI only
-  // exposes 4 of the number-font catalog's 21 real entries as clickable
-  // buttons; this can set any catalog id, live-tested against a real save
-  // (2026-08-09): an off-UI font persists and renders correctly.
+  // NAME_FONT_ID/NUMBER_FONT_ID (flat strings in teamData.teamInfos) turned
+  // out to be bookkeeping only -- confirmed live (2026-08-09) that patching
+  // just those left Home/Away jerseys showing whatever font was already
+  // baked in. Each uniform part carries its own fully-resolved material
+  // overlay the renderer actually reads: numberComp/fontComp on every
+  // frostbiteData.uniformParts.jerseys entry, `number` on every .helmets
+  // entry. This patches overlays[0] (the font-defining layer) on each,
+  // using the target font's own recipe (fetched by the popup via
+  // fetchFontRecipe() in src/lib/fontCatalog.js, since MAIN-world scripts
+  // can't import it). overlays[1]+ were identical/blank across every part
+  // and font tried, left untouched -- same as everything else we don't
+  // have a mapping for.
+  function firstOverlayFromRecipe(recipe) {
+    const overlays = recipe && recipe.overlays;
+    if (!overlays) return null;
+    const key = Object.keys(overlays)[0];
+    return key != null ? overlays[key] : null;
+  }
+
   function applyFontsToBundle(bundle, fonts) {
     const teamInfos = bundle && bundle.teamData && bundle.teamData.teamInfos;
     if (!teamInfos) throw new Error("Bundle is missing teamData.teamInfos");
+    const uniformParts = bundle && bundle.teamData && bundle.teamData.frostbiteData && bundle.teamData.frostbiteData.uniformParts;
     const applied = {};
-    if (fonts && fonts.nameFontId) {
-      teamInfos.NAME_FONT_ID = fonts.nameFontId;
-      applied.nameFontId = fonts.nameFontId;
-    }
+
     if (fonts && fonts.numberFontId) {
       teamInfos.NUMBER_FONT_ID = fonts.numberFontId;
       applied.numberFontId = fonts.numberFontId;
+      const overlay = firstOverlayFromRecipe(fonts.numberFontRecipe);
+      if (overlay) {
+        let jerseysPatched = 0;
+        for (const jersey of Object.values((uniformParts && uniformParts.jerseys) || {})) {
+          if (jersey && jersey.numberComp && jersey.numberComp.overlays && jersey.numberComp.overlays[0]) {
+            jersey.numberComp.overlays[0] = overlay;
+            jerseysPatched++;
+          }
+        }
+        let helmetsPatched = 0;
+        for (const helmet of Object.values((uniformParts && uniformParts.helmets) || {})) {
+          if (helmet && helmet.number && helmet.number.overlays && helmet.number.overlays[0]) {
+            helmet.number.overlays[0] = overlay;
+            helmetsPatched++;
+          }
+        }
+        applied.numberFontJerseysPatched = jerseysPatched;
+        applied.numberFontHelmetsPatched = helmetsPatched;
+      }
     }
+
+    if (fonts && fonts.nameFontId) {
+      teamInfos.NAME_FONT_ID = fonts.nameFontId;
+      applied.nameFontId = fonts.nameFontId;
+      const overlay = firstOverlayFromRecipe(fonts.nameFontRecipe);
+      if (overlay) {
+        let jerseysPatched = 0;
+        for (const jersey of Object.values((uniformParts && uniformParts.jerseys) || {})) {
+          if (jersey && jersey.fontComp && jersey.fontComp.overlays && jersey.fontComp.overlays[0]) {
+            jersey.fontComp.overlays[0] = overlay;
+            jerseysPatched++;
+          }
+        }
+        applied.nameFontJerseysPatched = jerseysPatched;
+      }
+    }
+
     return applied;
   }
 

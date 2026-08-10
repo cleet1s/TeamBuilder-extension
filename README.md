@@ -45,10 +45,15 @@ behavior is working.
   `docs/teambuilder-api-recon.md`'s Brand-tab section). The popup's "Fonts"
   section fetches the full catalog live (`src/lib/fontCatalog.js`) for both
   Nameplates and Numbers and lets you push any entry via the same
-  arm-then-click-Save flow as the roster push (`applyFontsToBundle()` in
-  `rosterToBundle.js`/`inject.js`, patching the plain `NAME_FONT_ID`/
-  `NUMBER_FONT_ID` string fields in `teamData.teamInfos`). Live-tested
-  against a real save.
+  arm-then-click-Save flow as the roster push. Setting the flat
+  `NAME_FONT_ID`/`NUMBER_FONT_ID` string fields in `teamData.teamInfos`
+  turned out not to be enough on its own -- it doesn't drive rendering.
+  `applyFontsToBundle()` (`rosterToBundle.js`/`inject.js`) also fetches the
+  chosen font's recipe and patches `overlays[0]` on every jersey's
+  `numberComp`/`fontComp` and every helmet's `number`, since each uniform
+  part carries its own independent, fully-baked copy of that data. Live-
+  tested against a real save across all three uniform slots (home/away/
+  black), verified at the data level, not just visually.
 
 ## Load it in Chrome
 

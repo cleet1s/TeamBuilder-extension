@@ -143,13 +143,31 @@ function applyCharacterVisualFields(visual, rosterPlayer) {
   if (rosterPlayer.weightLbs != null) visual.weightPounds = rosterPlayer.weightLbs;
 }
 
+// A font catalog entry's recipe JSON (fetched via fetchFontRecipe() in
+// src/lib/fontCatalog.js) has overlays keyed by string index
+// ({"0": {...}}); uniform parts store overlays as an array. Both share the
+// same element shape (info/textures/rsm/tint/blend/transform) -- pull the
+// first one out to drop straight into an overlays[] slot.
+function firstOverlayFromRecipe(recipe) {
+  const overlays = recipe && recipe.overlays;
+  if (!overlays) return null;
+  const key = Object.keys(overlays)[0];
+  return key != null ? overlays[key] : null;
+}
+
 // NAME_FONT_ID/NUMBER_FONT_ID are plain strings in teamData.teamInfos, same
-// flat shape as TEAM_NAME/TEAM_PRIMARY_LOGO/etc -- see docs/teambuilder-
-// api-recon.md's Brand-tab section. Team Builder's own Font Picker UI only
-// exposes 4 of the number-font catalog's 21 real entries as clickable
-// buttons; this can set any catalog id (fetched via src/lib/fontCatalog.js),
-// live-tested against a real save (2026-08-09): an off-UI font persists and
-// renders correctly.
+// flat shape as TEAM_NAME/TEAM_PRIMARY_LOGO/etc -- but they turned out to
+// be bookkeeping only. Confirmed live (2026-08-09): patching just those
+// fields left Home/Away jerseys rendering whatever font was already baked
+// in, unchanged. Each uniform part carries its own fully-resolved material
+// overlay that the 3D renderer actually reads -- numberComp/fontComp on
+// every entry in frostbiteData.uniformParts.jerseys, and `number` on every
+// entry in .helmets (pants/socks have neither for a standard uniform
+// style). This patches overlays[0] (the font-defining layer) on each one
+// it finds, using the target font's own recipe. overlays[1]+ were observed
+// identical/blank across every part and every font tried, so those are
+// left untouched, along with arrayTexture/maskCid/materials -- same
+// "don't touch what we don't have a mapping for" rule as the roster merge.
 export function applyFontsToBundle(bundle, fonts) {
   const teamInfos = bundle?.teamData?.teamInfos;
   if (!teamInfos) {
@@ -157,14 +175,48 @@ export function applyFontsToBundle(bundle, fonts) {
       "Bundle is missing teamData.teamInfos -- unexpected shape, see docs/teambuilder-api-recon.md"
     );
   }
+  const uniformParts = bundle?.teamData?.frostbiteData?.uniformParts;
   const applied = {};
-  if (fonts?.nameFontId) {
-    teamInfos.NAME_FONT_ID = fonts.nameFontId;
-    applied.nameFontId = fonts.nameFontId;
-  }
+
   if (fonts?.numberFontId) {
     teamInfos.NUMBER_FONT_ID = fonts.numberFontId;
     applied.numberFontId = fonts.numberFontId;
+    const overlay = firstOverlayFromRecipe(fonts.numberFontRecipe);
+    if (overlay) {
+      let jerseysPatched = 0;
+      for (const jersey of Object.values(uniformParts?.jerseys || {})) {
+        if (jersey?.numberComp?.overlays?.[0]) {
+          jersey.numberComp.overlays[0] = overlay;
+          jerseysPatched++;
+        }
+      }
+      let helmetsPatched = 0;
+      for (const helmet of Object.values(uniformParts?.helmets || {})) {
+        if (helmet?.number?.overlays?.[0]) {
+          helmet.number.overlays[0] = overlay;
+          helmetsPatched++;
+        }
+      }
+      applied.numberFontJerseysPatched = jerseysPatched;
+      applied.numberFontHelmetsPatched = helmetsPatched;
+    }
   }
+
+  if (fonts?.nameFontId) {
+    teamInfos.NAME_FONT_ID = fonts.nameFontId;
+    applied.nameFontId = fonts.nameFontId;
+    const overlay = firstOverlayFromRecipe(fonts.nameFontRecipe);
+    if (overlay) {
+      let jerseysPatched = 0;
+      for (const jersey of Object.values(uniformParts?.jerseys || {})) {
+        if (jersey?.fontComp?.overlays?.[0]) {
+          jersey.fontComp.overlays[0] = overlay;
+          jerseysPatched++;
+        }
+      }
+      applied.nameFontJerseysPatched = jerseysPatched;
+    }
+  }
+
   return applied;
 }

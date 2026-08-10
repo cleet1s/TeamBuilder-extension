@@ -1,6 +1,6 @@
 import { validateRoster } from "../lib/model.js";
 import { getActiveRoster, getSelectedFonts, setSelectedFonts } from "../lib/storage.js";
-import { fetchNumberFonts, fetchNameplateFonts } from "../lib/fontCatalog.js";
+import { fetchNumberFonts, fetchNameplateFonts, fetchFontRecipe } from "../lib/fontCatalog.js";
 
 const el = {
   rosterName: document.getElementById("roster-name"),
@@ -58,8 +58,18 @@ function renderPushResult(result) {
   }
   if (report.fonts) {
     const fontBits = [];
-    if (report.fonts.nameFontId) fontBits.push(`nameplate → ${report.fonts.nameFontId}`);
-    if (report.fonts.numberFontId) fontBits.push(`numbers → ${report.fonts.numberFontId}`);
+    if (report.fonts.nameFontId) {
+      const n = report.fonts.nameFontJerseysPatched;
+      fontBits.push(`nameplate → ${report.fonts.nameFontId}${n ? ` (${n} jerseys)` : " (id only, no visual change)"}`);
+    }
+    if (report.fonts.numberFontId) {
+      const j = report.fonts.numberFontJerseysPatched;
+      const h = report.fonts.numberFontHelmetsPatched;
+      const patchedBits = [];
+      if (j) patchedBits.push(`${j} jerseys`);
+      if (h) patchedBits.push(`${h} helmets`);
+      fontBits.push(`numbers → ${report.fonts.numberFontId}${patchedBits.length ? ` (${patchedBits.join(", ")})` : " (id only, no visual change)"}`);
+    }
     parts.push(`Fonts: ${fontBits.join(", ")}`);
   }
   el.pushResult.textContent = parts.join(". ");
@@ -79,6 +89,11 @@ function populateFontSelect(selectEl, fonts, selectedId) {
   }
 }
 
+// Populated by initFonts(), kept around so the push handler can look up a
+// selected id's `file` URL (the select only stores id/displayName).
+let loadedNameplateFonts = [];
+let loadedNumberFonts = [];
+
 async function initFonts() {
   const selected = await getSelectedFonts();
   try {
@@ -86,6 +101,8 @@ async function initFonts() {
       fetchNameplateFonts(),
       fetchNumberFonts(),
     ]);
+    loadedNameplateFonts = nameplateFonts;
+    loadedNumberFonts = numberFonts;
     populateFontSelect(el.nameplateFontSelect, nameplateFonts, selected.nameFontId);
     populateFontSelect(el.numberFontSelect, numberFonts, selected.numberFontId);
   } catch (err) {
@@ -167,18 +184,37 @@ async function init() {
 
   el.pushFontsBtn.addEventListener("click", async () => {
     if (!tab?.id) return;
-    const fonts = {
-      nameFontId: el.nameplateFontSelect.value || null,
-      numberFontId: el.numberFontSelect.value || null,
-    };
-    await setSelectedFonts(fonts);
+    const nameFontId = el.nameplateFontSelect.value || null;
+    const numberFontId = el.numberFontSelect.value || null;
+    await setSelectedFonts({ nameFontId, numberFontId });
+
     el.pushFontsBtn.disabled = true;
-    el.pushFontsBtn.textContent = "Sending…";
+    el.pushFontsBtn.textContent = "Fetching font data…";
     renderPushResult(null);
+
+    // The id alone only updates bookkeeping (teamData.teamInfos) -- the
+    // actual per-uniform-part overlay data has to travel with it. If a
+    // recipe fetch fails, fall through with it left null: the push still
+    // sets the flat id fields rather than failing outright (same
+    // graceful-degradation rule as applyFontsToBundle itself).
+    let nameFontRecipe = null;
+    let numberFontRecipe = null;
+    try {
+      const nameEntry = loadedNameplateFonts.find((f) => f.id === nameFontId);
+      const numberEntry = loadedNumberFonts.find((f) => f.id === numberFontId);
+      [nameFontRecipe, numberFontRecipe] = await Promise.all([
+        nameEntry ? fetchFontRecipe(nameEntry.file) : null,
+        numberEntry ? fetchFontRecipe(numberEntry.file) : null,
+      ]);
+    } catch (err) {
+      // leave whichever recipe(s) didn't resolve as null and continue
+    }
+
+    el.pushFontsBtn.textContent = "Sending…";
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
         type: "IMPORT_FONTS",
-        fonts,
+        fonts: { nameFontId, nameFontRecipe, numberFontId, numberFontRecipe },
       });
       el.pushFontsBtn.textContent = response?.ok ? "Sent" : "Not ready yet";
     } catch (err) {

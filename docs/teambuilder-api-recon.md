@@ -426,25 +426,62 @@ textureId`/`tint`/`blend`/`transform` shape as everything else in this
 doc — pointing at a real, current game asset, e.g. `Nike_Jersey_2025_
 StrokedVapor_Strike_NUM_Array`.
 
-**Live-tested (2026-08-09):** patched `NUMBER_FONT_ID` directly to
-`"nike_number_font_stroked_vapor_strike"` (one of the 17 UI-locked fonts) in
-an otherwise-untouched save, confirmed via fresh reload that the server
-persisted it, and confirmed visually that it renders correctly (distinct
-green-stroked/coral font, clearly different from all 4 UI options). So: all
-21 catalog fonts are usable today, no reverse-engineering needed beyond
-what's already written down here — `pushRoster()`-style field patching is
-sufficient. `nameplate_font_list.json` also only has 4 catalog entries and
-all 4 are already exposed in the UI, so nothing hidden there currently.
+**Correction (2026-08-09, same day, later session): `NAME_FONT_ID`/
+`NUMBER_FONT_ID` alone do NOT drive rendering.** An earlier pass in this
+doc claimed patching just the flat field was "confirmed working" — that
+was a false positive. What actually happened: the jersey being viewed
+already had a similar-looking "stroked" font baked in from an earlier,
+unrelated edit, and the coincidental visual resemblance was mistaken for
+confirmation. Direct inspection of a live bundle showed the flat fields
+and the *actual* per-part data disagreeing outright (e.g. `NUMBER_FONT_ID`
+said `stroked_vapor_strike` while the Home jersey's own baked-in font was
+`stroked_bureau_2`, and Away's was a third value, `stroked_wide_all_league`
+— three different fonts across two jerseys and one "team-wide" field).
 
-**Implemented (2026-08-09):** the extension now exposes this. `src/lib/
-fontCatalog.js` fetches both catalogs live; `applyFontsToBundle()` in
-`src/lib/rosterToBundle.js` (and its MAIN-world duplicate in
-`src/content/inject.js`) patches `NAME_FONT_ID`/`NUMBER_FONT_ID`; the popup
-has a "Fonts" section with a dropdown per catalog (all entries, not just
-the 4 Team Builder's own UI wires up) and a "Push Fonts to Team Builder"
-button using the same arm-then-click-Save flow as the roster push.
-`inject.js`'s `pending` state now carries `roster` and/or `fonts`
-independently, so arming one doesn't clobber the other.
+**What actually drives rendering:** every uniform part that displays text
+carries its own fully-resolved material overlay, independent of
+`teamInfos`:
+- `teamData.frostbiteData.uniformParts.jerseys["<brandId>-<slot>-jersey"].numberComp` — jersey numbers
+- `...jerseys[...].fontComp` — jersey nameplate (back-of-jersey name)
+- `teamData.frostbiteData.uniformParts.helmets["<brandId>-<slot>-helmet"].number` — helmet numbers (front/back, gated by `helmetMaterialSettings.hasFrontNumber`/`hasBackNumber`)
+- pants/socks have neither field for a standard uniform style (checked directly, not assumed)
+
+Each of these three follows the identical shape: `{arrayTexture, maskCid,
+materials, overlays: [...]}`, where `overlays[0]` is the font-defining
+layer (`overlays[0].info.label` names the font; `overlays[0].textures.
+color.textureId` is its actual texture path) and `overlays[1]` was
+observed **identical and blank** (empty `info.label`) across every part
+and every font checked — safe to leave untouched. A catalog entry's `file`
+recipe JSON has the exact same overlay element shape, just keyed
+`{"0": {...}}` instead of array-indexed, so a catalog font drops straight
+into `overlays[0]` once unwrapped.
+
+Each of the 3 uniform slots (home/away/black) has its own independent
+copy of this data — pushing a font has to patch `overlays[0]` in every
+jersey (and helmet, for numbers) individually, not just once. `teamInfos.
+NAME_FONT_ID`/`NUMBER_FONT_ID` still get set alongside (matches Team
+Builder's own UI-state bookkeeping) but are cosmetic as far as the 3D
+renderer is concerned.
+
+**Implemented and live-tested (2026-08-09):** `src/lib/fontCatalog.js`
+fetches both catalogs live plus a specific font's recipe (`fetchFontRecipe()`).
+`applyFontsToBundle()` in `src/lib/rosterToBundle.js` (and its MAIN-world
+duplicate in `src/content/inject.js`) sets the flat `teamInfos` fields
+*and* walks every jersey/helmet patching `overlays[0]` from the fetched
+recipe. The popup's "Fonts" section fetches the selected font's recipe at
+push time and sends it along with the id.
+
+Verified live, at the data level this time (not visual guesswork):
+pushed `nike_number_font_michigan_state`, reloaded, and confirmed via
+direct bundle inspection that `numberComp.overlays[0].info.label` matched
+on **all three** jerseys (home/away/black) and `number.overlays[0].info.
+label` matched on all three helmets — 3 jerseys + 3 helmets patched in one
+save, per `applyFontsToBundle()`'s own returned counts. Screenshotted
+Away's actual 3D jersey render afterward to confirm visually too. This is
+the correction for an earlier claim in this same doc (further up this
+section) that patching only the flat field was "confirmed working" — it
+wasn't; that was a coincidental visual match on a jersey that already had
+a similar-looking font baked in.
 
 **Note on `BRAND_ID` / other brands (not yet tested):** both font catalogs
 are shaped as a dict keyed by brand (`{"NIKE": [...]}`), implying the schema

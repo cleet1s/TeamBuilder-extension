@@ -31,3 +31,18 @@ export function fetchNumberFonts() {
 export function fetchNameplateFonts() {
   return fetchCatalog(NAMEPLATE_FONT_LIST_URL);
 }
+
+// A catalog entry's own `file` URL holds its material recipe -- shape:
+// {materials: {}, overlays: {"0": {info, textures, rsm, tint, blend,
+// transform}}}. This is what actually needs to land in a uniform part's
+// numberComp/fontComp/number.overlays[0] for the font to render; the flat
+// NAME_FONT_ID/NUMBER_FONT_ID string in teamData.teamInfos alone does not
+// affect rendering (confirmed live 2026-08-09 -- see docs/teambuilder-
+// api-recon.md's Brand-tab section).
+export async function fetchFontRecipe(fileUrl) {
+  const res = await fetch(fileUrl);
+  if (!res.ok) {
+    throw new Error(`Font recipe fetch failed (${res.status}): ${fileUrl}`);
+  }
+  return res.json();
+}
